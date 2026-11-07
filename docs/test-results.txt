@@ -1,0 +1,17 @@
+﻿
+> slotbook@1.0.0 test
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/Msi/Downloads/slotbook (1)[39m
+
+ [32mΓ£ô[39m test/concurrency.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 2254[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m 100 parallel holds on one 1:1 slot -> exactly 1 wins [33m1211[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m group capacity 5: 40 parallel holds -> exactly 5 [33m383[2mms[22m[39m
+ [32mΓ£ô[39m test/slots.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m12 passed[39m[22m[90m (12)[39m
+[2m   Start at [22m 10:55:56
+[2m   Duration [22m 3.43s[2m (transform 142ms, setup 0ms, collect 365ms, tests 2.26s, environment 1ms, prepare 336ms)[22m
+

@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Book time · Slotbook</title><link rel="stylesheet" href="/style.css"><script src="/common.js"></script>
+<main class="sec" style="max-width:640px"><div style="text-align:center"><div class="avatar" id="av">?</div><h1 id="n">Loading…</h1><p class="muted" id="m"></p></div><div id="list"></div></main>
+<script>
+const host = location.pathname.slice(1);
+api("/api/hosts/" + host).then(h => {
+  $("#av").textContent = h.name[0]; $("#n").textContent = h.name; $("#m").textContent = "Pick a meeting type to see available times · host time zone " + h.tz; document.title = h.name + " · Slotbook";
+  $("#list").innerHTML = h.events.map(e => `<a class="card ev" href="/${host}/${e.slug}"><div><h3 style="margin:0">${esc(e.name)}</h3><span class="muted">${e.duration_min} min · ${e.capacity > 1 ? "Group, up to " + e.capacity : "One-on-one"}</span></div><span class="badge">Book →</span></a>`).join("") || '<p class="muted" style="text-align:center">No event types yet.</p>';
+}).catch(() => { $("#n").textContent = "Host not found"; });
+</script></html>

@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Book a time · Slotbook</title><link rel="stylesheet" href="/style.css"><script src="/common.js"></script>
+<main class="wrap"><div class="card split">
+<aside class="side"><span class="badge" id="hn">Host</span><h1 id="t" style="font-size:1.45rem;margin-top:.7rem">Loading…</h1><p class="muted" id="meta"></p>
+<label for="tz">Time zone</label><select id="tz"></select></aside>
+<section class="main"><div id="slots"></div>
+<form id="f" hidden><h2>Enter your details</h2><p><span class="badge" id="hold" role="timer"></span></p>
+<label for="n">Name</label><input id="n" required autocomplete="name"><label for="e">Email</label><input id="e" type="email" required autocomplete="email">
+<p><button class="primary">Confirm booking</button> <button type="button" id="back">Choose another time</button></p></form>
+<div id="done" hidden></div></section></div></main>
+<script>
+const [host, slug] = location.pathname.slice(1).split("/");
+let ev, hold, timer, tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const show = f => { $("#f").hidden = !f; $("#slots").hidden = f; };
+async function draw() { const s = await api(`/api/hosts/${host}/events/${slug}/slots?tz=${encodeURIComponent(tz)}`); picker($("#slots"), s.slots, tz, pick); }
+async function pick(s) {
+  try {
+    hold = await api("/api/holds", { method: "POST", headers: { "idempotency-key": crypto.randomUUID() }, body: { eventTypeId: ev.id, start: s.start } });
+    show(true); $("#n").focus(); clearInterval(timer);
+    const tick = () => { const left = Math.round((new Date(hold.hold_expires_at) - Date.now()) / 1000);
+      if (left <= 0) { clearInterval(timer); show(false); toast("Your hold expired. Please pick a time again.", true); draw(); }
+      else $("#hold").textContent = `${full(hold.start_at, tz)} · held for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`; };
+    tick(); timer = setInterval(tick, 1000);
+  } catch (e) { toast(e.message + ". The list was refreshed.", true); draw(); }
+}
+$("#back").onclick = () => { clearInterval(timer); show(false); draw(); };
+$("#f").onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const b = await api(`/api/holds/${hold.id}/confirm`, { method: "POST", body: { name: $("#n").value, email: $("#e").value } });
+    clearInterval(timer); $("#f").hidden = true; $("#done").hidden = false;
+    $("#done").innerHTML = `<div class="ok-ic">✓</div><h2>You're booked</h2><p>${esc(full(b.start_at, tz))}<br><span class="muted">${esc(ev.name)} with ${esc(ev.host_name)}</span></p><p>Save your private link to view, reschedule or cancel:</p><p><a class="badge" href="/manage/${b.manage_token}">Manage booking</a></p><p class="muted" style="word-break:break-all">${location.origin}/manage/${b.manage_token}</p>`;
+  } catch (x) { toast(x.message, true); }
+};
+(async () => { try {
+  ev = await api(`/api/hosts/${host}/events/${slug}`); $("#t").textContent = ev.name; $("#hn").textContent = ev.host_name;
+  $("#meta").textContent = `${ev.duration_min} min · ${ev.capacity > 1 ? "Group session, up to " + ev.capacity : "One-on-one"}`;
+  tzSelect($("#tz"), tz, v => { tz = v; draw(); }); draw();
+} catch (e) { $("#t").textContent = "Event not found"; } })();
+</script></html>

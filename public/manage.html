@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Manage booking · Slotbook</title><link rel="stylesheet" href="/style.css"><script src="/common.js"></script>
+<main class="wrap"><div class="card"><h1>Your booking</h1><div id="info"></div><label for="tz">Show times in</label><select id="tz" style="max-width:320px"></select></div>
+<div id="act" hidden><div class="card"><h2>Reschedule</h2><div id="slots"></div></div>
+<div class="card"><h2>Cancel booking</h2><label for="r">Reason (optional)</label><input id="r"><p><button id="c" class="danger">Cancel booking</button></p></div></div></main>
+<script>
+const token = location.pathname.split("/")[2]; let b, tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+async function load() {
+  b = await api("/api/bookings/" + token);
+  $("#info").innerHTML = `<p style="font-size:1.1rem"><b>${esc(b.event_name)}</b><br>${esc(full(b.start_at, tz))}</p><span class="badge ${b.status === "confirmed" ? "ok" : "bad"}">${b.status}</span>`;
+  $("#act").hidden = b.status !== "confirmed"; if (b.status === "confirmed") draw();
+}
+async function draw() { const s = await api(`/api/hosts/${b.host_slug}/events/${b.event_slug}/slots?tz=${encodeURIComponent(tz)}`); picker($("#slots"), s.slots, tz, async s => {
+  try { await api(`/api/bookings/${token}/reschedule`, { method: "POST", body: { start: s.start } }); toast("Booking rescheduled"); load(); } catch (e) { toast(e.message, true); draw(); } }); }
+$("#c").onclick = async () => { if (!confirm("Cancel this booking?")) return; try { await api(`/api/bookings/${token}/cancel`, { method: "POST", body: { reason: $("#r").value } }); toast("Booking cancelled"); load(); } catch (e) { toast(e.message, true); } };
+tzSelect($("#tz"), tz, v => { tz = v; load(); });
+load().catch(e => { $("#info").innerHTML = `<p class="muted">${esc(e.message)}</p>`; });
+</script></html>

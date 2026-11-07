@@ -1,0 +1,57 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Host dashboard · Slotbook</title><link rel="stylesheet" href="/style.css"><script src="/common.js"></script>
+<main class="wrap">
+<form id="login" class="card" style="max-width:380px;margin:3rem auto"><h1 style="font-size:1.4rem">Host sign in</h1><p class="muted">Demo login is pre-filled.</p>
+<label for="em">Email</label><input id="em" value="demo@slotbook.dev"><label for="pw">Password</label><input id="pw" type="password" value="demo1234"><p><button class="primary" style="width:100%">Sign in</button></p></form>
+<div id="app" hidden>
+<div style="display:flex;justify-content:space-between;align-items:center"><h1 id="hi"></h1><button id="out">Sign out</button></div>
+<div class="stats" id="stats"></div>
+<div class="tabs" role="tablist"><button role="tab" id="t-bookings">Bookings</button><button role="tab" id="t-events">Event types</button><button role="tab" id="t-availability">Availability</button><button role="tab" id="t-settings">Settings</button></div>
+<section id="p-bookings" class="card"><h2>Upcoming bookings</h2><table><thead><tr><th>When</th><th>Event</th><th>Guest</th><th></th></tr></thead><tbody id="bks"></tbody></table></section>
+<section id="p-events" hidden><div class="card"><h2>Your event types</h2><table><thead><tr><th>Event</th><th>Details</th><th>Share</th></tr></thead><tbody id="evs"></tbody></table></div>
+<form id="evf" class="card"><h2>New event type</h2><div class="row" id="fields"></div><p><button class="primary">Create event type</button></p></form></section>
+<section id="p-availability" hidden><div class="card"><h2>Weekly hours</h2><p class="muted">Times are in your home time zone. Add several windows per day, e.g. a lunch break.</p><div id="days"></div></div>
+<div class="card"><h2>Date overrides</h2><div id="ovl"></div>
+<div class="win" style="margin-top:.8rem"><input id="od" type="date" aria-label="Override date"><select id="om" aria-label="Override type"><option value="off">Day off</option><option value="custom">Custom hours</option></select><input id="os" type="time" value="10:00" aria-label="Start"><input id="oe" type="time" value="12:00" aria-label="End"><button id="oadd">Add override</button></div></div>
+<button id="saveav" class="primary">Save availability</button></section>
+<section id="p-settings" hidden><div class="card"><h2>Settings</h2><div class="row"><div><label for="tz">Home time zone</label><select id="tz"></select></div><div><label for="cap">Max bookings per day (blank = unlimited)</label><input id="cap" type="number" min="1"></div></div><p><button id="savetz" class="primary">Save settings</button></p></div>
+<div class="card"><h2>Notification feed</h2><ul id="nts" class="muted"></ul></div></section>
+</div></main>
+<script>
+const D = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], T = ["bookings", "events", "availability", "settings"], snips = [];
+const F = [["name", "Name", "Intro call"], ["slug", "Slug", "intro"], ["duration_min", "Duration (15-120)", 30], ["capacity", "Capacity (1 = 1:1)", 1], ["buffer_before_min", "Buffer before (0-30)", 0], ["buffer_after_min", "Buffer after (0-30)", 0], ["min_notice_min", "Min notice (min)", 240], ["horizon_days", "Horizon (days)", 30]];
+$("#fields").innerHTML = F.map(([k, l, v]) => `<div><label for="f-${k}">${l}</label><input id="f-${k}" name="${k}" value="${v}"></div>`).join("");
+const tab = t => T.forEach(x => { $("#p-" + x).hidden = x !== t; $("#t-" + x).setAttribute("aria-selected", x === t); });
+T.forEach(t => $("#t-" + t).onclick = () => tab(t));
+const copy = i => navigator.clipboard.writeText(snips[i]).then(() => toast("Copied to clipboard"));
+$("#login").onsubmit = async e => { e.preventDefault(); try { localStorage.tok = (await api("/api/auth/login", { method: "POST", body: { email: $("#em").value, password: $("#pw").value } })).token; await refresh(); } catch (x) { toast(x.message, true); } };
+$("#out").onclick = () => { localStorage.removeItem("tok"); location.reload(); };
+$("#evf").onsubmit = async e => { e.preventDefault(); const b = {}; F.forEach(([k]) => { const v = $("#f-" + k).value; b[k] = ["name", "slug"].includes(k) ? v : +v; });
+  try { await api("/api/host/event-types", { method: "POST", body: b }); toast("Event type created"); refresh("events"); } catch (x) { toast(x.message, true); } };
+$("#savetz").onclick = async () => { try { await api("/api/host/me", { method: "PUT", body: { tz: $("#tz").value, daily_cap: +$("#cap").value || null } }); toast("Settings saved"); } catch (x) { toast(x.message, true); } };
+let rules = [], ovs = [];
+const addWin = d => { rules.push({ weekday: d, start: "09:00", end: "17:00" }); drawAvail(); };
+const toggleDay = (d, on) => { if (on) addWin(d); else { rules = rules.filter(r => r.weekday !== d); drawAvail(); } };
+function drawAvail() {
+  $("#days").innerHTML = [1, 2, 3, 4, 5, 6, 7].map(d => { const w = rules.map((r, i) => [r, i]).filter(([r]) => r.weekday === d);
+    return `<div class="dayrow"><label><input type="checkbox" ${w.length ? "checked" : ""} onchange="toggleDay(${d},this.checked)">${D[d]}</label><div>` + (w.length ? w.map(([r, i]) => `<div class="win"><input type="time" value="${r.start}" aria-label="${D[d]} start" onchange="rules[${i}].start=this.value"> to <input type="time" value="${r.end}" aria-label="${D[d]} end" onchange="rules[${i}].end=this.value"><button onclick="rules.splice(${i},1);drawAvail()" aria-label="Remove window">✕</button></div>`).join("") + `<button onclick="addWin(${d})">+ Add window</button>` : '<span class="muted">Unavailable</span>') + "</div></div>"; }).join("");
+  $("#ovl").innerHTML = ovs.map((o, i) => `<div class="win"><b>${o.date}</b> ${o.is_off ? '<span class="badge bad">Day off</span>' : `<span class="badge">${o.start} to ${o.end}</span>`}<button onclick="ovs.splice(${i},1);drawAvail()" aria-label="Remove override">✕</button></div>`).join("") || '<span class="muted">No overrides yet.</span>';
+}
+$("#oadd").onclick = () => { if (!$("#od").value) return toast("Pick a date first", true); const off = $("#om").value === "off"; ovs = ovs.filter(o => o.date !== $("#od").value); ovs.push({ date: $("#od").value, is_off: off, start: off ? null : $("#os").value, end: off ? null : $("#oe").value }); ovs.sort((a, b) => a.date.localeCompare(b.date)); drawAvail(); };
+$("#saveav").onclick = async () => { try { for (const r of rules) if (r.end <= r.start) throw new Error("End time must be after start time"); await api("/api/host/availability", { method: "PUT", body: { rules, overrides: ovs } }); toast("Availability saved"); } catch (x) { toast(x.message, true); } };
+async function cancel(id) { const reason = prompt("Reason for cancelling?"); if (reason === null) return; try { await api(`/api/host/bookings/${id}/cancel`, { method: "POST", body: { reason } }); toast("Booking cancelled"); refresh(); } catch (x) { toast(x.message, true); } }
+async function refresh(t = "bookings") {
+  const me = await api("/api/host/me"); $("#login").hidden = true; $("#app").hidden = false; $("#hi").textContent = `Welcome, ${me.name}`;
+  tzSelect($("#tz"), me.tz, () => {}); $("#cap").value = me.daily_cap ?? "";
+  const [evs, av, bk, nt] = await Promise.all(["event-types", "availability", "bookings", "notifications"].map(p => api("/api/host/" + p)));
+  $("#stats").innerHTML = [["Upcoming bookings", bk.length], ["Event types", evs.length], ["Notifications sent", nt.length]].map(([l, n]) => `<div class="card"><span class="muted">${l}</span><b>${n}</b></div>`).join("");
+  snips.length = 0;
+  $("#evs").innerHTML = evs.map(e => { const u = `${location.origin}/${me.slug}/${e.slug}`; snips.push(u, `<iframe src="${u}?embed=1" width="100%" height="720" style="border:0" title="Book a time"></iframe>`); const i = snips.length - 2;
+    return `<tr><td><b>${esc(e.name)}</b><br><a href="/${me.slug}/${e.slug}">/${me.slug}/${esc(e.slug)}</a></td><td class="muted">${e.duration_min} min · cap ${e.capacity} · buffers ${e.buffer_before_min}/${e.buffer_after_min}<br>notice ${e.min_notice_min} min · ${e.horizon_days} days</td><td><button onclick="copy(${i})">Copy link</button> <button onclick="copy(${i + 1})">Copy embed</button></td></tr>`; }).join("");
+  rules = av.rules.map(r => ({ weekday: r.weekday, start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5) }));
+  ovs = av.overrides.map(o => ({ date: o.d, is_off: o.is_off, start: o.start_time && o.start_time.slice(0, 5), end: o.end_time && o.end_time.slice(0, 5) })); drawAvail();
+  $("#bks").innerHTML = bk.map(b => `<tr><td>${esc(full(b.start_at, me.tz))}</td><td>${esc(b.event_name)}</td><td>${esc(b.guest_name)}<br><span class="muted">${esc(b.guest_email)}</span></td><td><button class="danger" onclick="cancel('${b.id}')">Cancel</button></td></tr>`).join("") || '<tr><td colspan="4" class="muted">No upcoming bookings yet.</td></tr>';
+  $("#nts").innerHTML = nt.map(n => `<li><span class="badge">${n.kind}</span> ${esc(n.guest_email)} · ${new Date(n.created_at).toLocaleString()}</li>`).join("") || "<li>None</li>";
+  tab(t);
+}
+if (localStorage.tok) refresh().catch(() => localStorage.removeItem("tok"));
+</script></html>
